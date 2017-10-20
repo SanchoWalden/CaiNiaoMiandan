@@ -102,9 +102,10 @@
         function getWaybillJson(waybillNO) {
             //用TMS_WAYBILL_GET获取云打印接口即可，模板url自定义选择
             //获取waybill对应的json object，此处的ajaxGet函数是伪代码，此处需修改
-            var jsonObject = ajaxGet(waybillNO);
+
+            //var jsonObject = ajaxGet(waybillNO);
             $.get('http://localhost:54439/api/MianDan', function (data) {
-                
+                alert(data);
             })
             return jsonObject;
         }
@@ -176,6 +177,7 @@
 <body>
     <form id="form1" runat="server">
         <div>
+            <input type="button"  onclick="getWaybillJson()" value="获取面单信息"/>
         </div>
     </form>
 </body>

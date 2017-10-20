@@ -33,7 +33,7 @@ namespace CaiNiaoMiandan
         /**
          * 测试环境token，token是商家在物流云平台授权ISV后生成的授权码，目前需要商家配置在ISV的软件中
          */
-        private static String dailyToken = "TDFwc3B1bVhrc096bkNoYndFbS9KVDUzOGNsK3UrZlpOUkpsT3VMcWhiWDQxWWV6L24yUm1iZm1QTmJtak40dA==";
+        private static String dailyToken = "R1ZRODUzVG9jZDVSV3VYUkJ5UURkMHpRR0F3VXFaN1dpc3ZiQWFYY0lBNkp2VDZjSExvSDgrWGhLdG13a0Z6Nw==";
         IPacClient pacClient = new DefaultPacClient(dailyUrl, dailyAppKey, dailySecretKey);
         protected void Page_Load(object sender, EventArgs e)
         {
@@ -48,7 +48,7 @@ namespace CaiNiaoMiandan
         PacResponse SubscriptionQueryResponse()
         {
             var req = new TmsWaybillSubscriptionQueryRequest();
-            req.cpCode = "STO";
+            req.cpCode = "ZTO";
             TmsWaybillSubscriptionQueryResponse rep = pacClient.Send(req, dailyToken);
             if (rep.Success == false)
             {
@@ -62,7 +62,6 @@ namespace CaiNiaoMiandan
         /// <returns></returns>
         PacResponse GetResponse()
         {
-            IPacClient pacClient = new DefaultPacClient(dailyAppKey, dailySecretKey, dailyUrl);
             var req = new TmsWaybillGetRequest();
 
             TmsWaybillGetResponse rep = pacClient.Send(req, dailyToken);

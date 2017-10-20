@@ -1,0 +1,344 @@
+﻿
+@{
+    Layout = null;
+}
+
+<!DOCTYPE html>
+
+<html>
+<head>
+    <meta name="viewport" content="width=device-width" />
+    <title>Index</title>
+    <script src="~/Scripts/jquery-3.2.1.min.js"></script>
+    <script type="text/javascript">
+        var webSocket;
+        var defaultPrinter;
+        var waybillArray = new Array();
+        ////面单号
+        //var waybillNO = '9890000076011';
+        //模板url
+        //var waybillTemplateURL = 'http://cloudprint.cainiao.com/template/standard/301/176';
+        //自定义模板url
+        //var customAreaURL = 'http://cloudprint.cainiao.com/cloudprint/customArea/queryCustomAreaList4Top.json?custom_area_id=2201&user_id=2066393830';
+
+        //备注：webSocket 是全局对象，不要每次发送请求丢去创建一个，做到webSocket对象重用，和打印组件保持长连接。(1、连接打印客户端)
+        function doConnect() {
+            webSocket = new WebSocket('ws://localhost:13528');
+            //如果是https的话，端口是13529
+            //socket = new WebSocket('wss://localhost:13529');
+            // 打开Socket
+            webSocket.onopen = function (event) {
+                // 监听消息
+                console.log('打印机打开了');
+                doGetPrinters();
+
+                webSocket.onmessage = function (event) {
+                    console.log('Client received a message', event);
+                    var data = JSON.parse(event.data);
+                    if ("getPrinters" == data.cmd) {
+                        console.log('打印机列表:' + JSON.stringify(data.printers));
+                        defaultPrinter = data.defaultPrinter;
+                        doSetPrinterConfig();
+                        console.log('默认打印机为:' + defaultPrinter);
+
+                    }
+                    else if ("print" == data.cmd && typeof (data.previewURL) != 'undefined') {
+                        console.log(data.previewURL);
+                        confirm("是否要跳转到预览？");
+                        window.open(data.previewURL);
+                    }
+
+                    else if ("print" == data.cmd && typeof (data.previewImage) != 'undefined') {
+                        console.log(data.previewImage);
+                        for (var i = 0; i < data.previewImage.length; i++) {
+                            var imgUrl = '<img width="200px" height="300px" src="' + data.previewImage[i] + '"/>';
+                            $('#imgBox').prepend(imgUrl);
+                        }
+
+                    }
+                    else {
+                        console.log("返回数据:" + JSON.stringify(data));
+                    }
+
+                };
+                // 监听Socket的关闭
+                webSocket.onclose = function (event) {
+                    console.log('Client notified socket has closed', event);
+                };
+                webSocket.onerror = function (event) {
+                    alert('无法连接到:' + printer_address);
+                };
+            };
+        }
+        /***
+         *
+         * 获取请求的UUID，指定长度和进制,如
+         * getUUID(8, 2)   //"01001010" 8 character (base=2)
+         * getUUID(8, 10) // "47473046" 8 character ID (base=10)
+         * getUUID(8, 16) // "098F4D35"。 8 character ID (base=16)
+         *
+         */
+        function getUUID(len, radix) {
+            var chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'.split('');
+            var uuid = [], i;
+            radix = radix || chars.length;
+            if (len) {
+                for (i = 0; i < len; i++) uuid[i] = chars[0 | Math.random() * radix];
+            } else {
+                var r;
+                uuid[8] = uuid[13] = uuid[18] = uuid[23] = '-';
+                uuid[14] = '4';
+                for (i = 0; i < 36; i++) {
+                    if (!uuid[i]) {
+                        r = 0 | Math.random() * 16;
+                        uuid[i] = chars[(i == 19) ? (r & 0x3) | 0x8 : r];
+                    }
+                }
+            }
+            return uuid.join('');
+        }
+        /***
+         * 构造request对象
+         */
+        function getRequestObject(cmd) {
+            var request = new Object();
+            request.requestID = getUUID(8, 16);
+            request.version = "1.0";
+            request.cmd = cmd;
+            return request;
+        }
+        /***
+         * 获取自定义区数据以及模板URL
+         * waybillNO 电子面单号，此处暂时无法修改
+         */
+        function getCustomAreaData() {
+            //获取waybill对应的自定义区的JSON object，此处的ajaxGet函数是伪代码,此处需修改
+            var data = new Object();
+            data.shopping = "我是动态的";
+            var ret = new Object();
+            ret.templateURL = 'http://cloudprint.cainiao.com/template/customArea/5002318';
+            ret.data = data;
+            console.log(ret);
+            return ret;
+        }
+        /***
+         * 获取电子面单Json 数据
+         * waybillNO 电子面单号,需要传很多参数
+         */
+        function getWaybillJson() {
+            //用TMS_WAYBILL_GET获取云打印接口即可，模板url自定义选择
+            //获取waybill对应的json object，此处的ajaxGet函数是伪代码，此处需修改
+
+            //var jsonObject = ajaxGet(waybillNO);
+            $.ajax({
+                type: "get",
+                url: "http://localhost:54439/api/MianDan",
+                async: false,
+                success: function (data) {
+                    console.log(data);
+                    if (data == null) {
+                        alert("木有搞到数据，瞅瞅是不是这单已经打印了，还是数据出错了，");
+                    }
+                    waybillArray = data;
+                }
+            });
+        }
+        /**
+         * 请求打印机列表demo
+         * */
+        function doGetPrinters() {
+            var request = getRequestObject("getPrinters");
+            console.log(webSocket);
+            webSocket.send(JSON.stringify(request));
+        }
+
+        /**
+         * 弹窗模式配置打印机
+         * */
+        function doPrinterConfig() {
+            var request = getRequestObject("printerConfig");
+            webSocket.send(JSON.stringify(request));
+        }
+        /***
+        * 打印机配置
+        */
+        function doSetPrinterConfig() {
+            var request = getRequestObject("setPrinterConfig");
+            request.printer = new Object();
+            request.printer.name = defaultPrinter;
+            request.printer.needTopLogo = true;
+            request.printer.needBottomLogo = false;
+            request.printer.forceNoPageMargins = true;
+            webSocket.send(JSON.stringify(request));
+        }
+
+        /**
+         * 展示电子面单
+         * printer 指定要使用那台打印机
+         * waybillArray 要打印的电子面单的数组
+         */
+        function doPrint(printer) {
+            var request = getRequestObject("print");
+            request.task = new Object();
+            request.task.taskID = getUUID(8, 10);
+            request.task.preview = true;
+            request.task.previewType = "image";
+            request.task.notifyMode = "allInOne";
+            request.task.printer = printer;
+            var documents = new Array();
+            getWaybillJson();
+            for (i = 0; i < waybillArray.length; i++) {
+                var doc = new Object();
+                doc.documentID = waybillArray[i].waybillCode;
+                var content = new Array();
+                var waybillJson = JSON.parse(waybillArray[i].printData);
+                var customAreaData = getCustomAreaData();
+                content.push(waybillJson, customAreaData);
+                doc.contents = content;
+                documents.push(doc);
+            }
+            request.task.documents = documents;
+            console.log(JSON.stringify(request));
+            webSocket.send(JSON.stringify(request));
+        }
+
+        /**
+     * 打印
+     * printer 指定要使用那台打印机
+     * waybillArray 要打印的电子面单的数组
+     */
+        function PrintWayBill(printer) {
+            var request = getRequestObject("print");
+            request.task = new Object();
+            request.task.taskID = getUUID(8, 10);
+            request.task.preview = false;
+            request.task.printer = printer;
+            var documents = new Array();
+            getWaybillJson();
+            for (i = 0; i < waybillArray.length; i++) {
+                var doc = new Object();
+                doc.documentID = waybillArray[i].waybillCode;
+                var content = new Array();
+                var waybillJson = JSON.parse(waybillArray[i].printData);
+                var customAreaData = getCustomAreaData();
+                content.push(waybillJson, customAreaData);
+                doc.contents = content;
+                documents.push(doc);
+            }
+            request.task.documents = documents;
+            console.log(JSON.stringify(request));
+            webSocket.send(JSON.stringify(request));
+        }
+        /**
+     * 预览
+     * printer 指定要使用那台打印机
+     * waybillArray 要打印的电子面单的数组
+     */
+        function PrintPreview(printer) {
+            var request = getRequestObject("print");
+            request.task = new Object();
+            request.task.taskID = getUUID(8, 10);
+            request.task.preview = true;
+            request.task.notifyMode = "allInOne";
+            request.task.printer = printer;
+            var documents = new Array();
+            getWaybillJson();
+            for (i = 0; i < waybillArray.length; i++) {
+                var doc = new Object();
+                doc.documentID = waybillArray[i].waybillCode;
+                var content = new Array();
+                var waybillJson = JSON.parse(waybillArray[i].printData);
+                var customAreaData = getCustomAreaData();
+                content.push(waybillJson, customAreaData);
+                doc.contents = content;
+                documents.push(doc);
+            }
+            request.task.documents = documents;
+            console.log(JSON.stringify(request));
+            webSocket.send(JSON.stringify(request));
+        }
+
+
+        /**
+       * billCode 取消获取电子面单号
+       */
+        function discardWaybill(billCode) {
+            //用TMS_WAYBILL_GET获取云打印接口即可，模板url自定义选择
+            //获取waybill对应的json object，此处的ajaxGet函数是伪代码，此处需修改
+
+            //var jsonObject = ajaxGet(waybillNO);
+            $.ajax({
+                type: "post",
+                url: "http://localhost:54439/api/MianDan/",
+                data: { "": billCode },
+                success: function (data, status) {
+                    console.log(data, status);
+                    if (data == 1) {
+                        alert("面单取消啦");
+                    }
+                    else {
+                        alert(data);
+                    }
+
+
+                }
+            });
+        }
+
+        ///**
+        // * 响应请求demo
+        // * */
+        //websocket.onmessage = function (event) {
+        //    var response = eval(event.data);
+        //    if (response.cmd == 'getPrinters') {
+        //        getPrintersHandler(response);//处理打印机列表
+        //    } else if (response.cmd == 'printerConfig') {
+        //        printConfigHandler(response);
+        //    }
+        //};
+        $(window).ready(function () {
+            doConnect();
+
+            $('#ScanBillCode').focus(function () {
+                $('#ScanBillCode').val('');
+            });
+            $('#ScanBillCode').blur(function () {
+                var scan = $('#ScanBillCode').val();
+                if ($.trim(scan).length != 0) {
+                    doPrint(defaultPrinter);
+                    PrintWayBill(defaultPrinter);
+                }
+
+
+            });
+
+        });
+
+    </script>
+</head>
+<body>
+    <div>
+        <input type="button" value="打印机连接" onclick="doConnect()" />
+        <input type="button" value="请求打印机列表" onclick="doGetPrinters()" />
+        <input type="button" value="弹窗模式配置打印机" onclick="doPrinterConfig()" />
+        <input type="button" value="打印机配置" onclick="doSetPrinterConfig()" />
+        <input type="button" value="展示" onclick="doPrint(defaultPrinter)" />
+        <input type="button" value="打印" onclick="PrintWayBill(defaultPrinter)" />
+        <input type="button" value="预览" onclick="PrintPreview(defaultPrinter)" />
+        <br />
+        <p>------------------------------</p>
+        <input type="text" id="BillCode" />
+        <input type="button" value="取消电子面单" onclick="discardWaybill($('#BillCode').val())" />
+        <br />
+        <p>------------------------------</p>
+        <label>扫描打印面单:</label> <input type="text" id="ScanBillCode" />
+
+        <br />
+        <p>------------------------------</p>
+
+        <input type="button" value="获取电子面单信息" onclick="getWaybillJson(defaultPrinter)" />
+        <label id="Message" />
+        <div id="imgBox"></div>
+    </div>
+</body>
+</html>
